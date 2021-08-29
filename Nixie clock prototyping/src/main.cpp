@@ -4,17 +4,76 @@
 
 RTC_DS3231 rtc;
 
-int latchPin = 9;       //Pin connected to RCK of TPIC6B595
-int masterReset = 10;   //Pin connected to SRCLR of all TPIC6B595 IC-s
-int dataPin = 11;       //Pin connected to SERIAL IN of TPIC6B595
-int clockPin = 12;      //Pin connected to RCK of TPIC6B595
-int minuteCounter = -1; //used to determine when half an hour has passed
-int minuteChange = 100; //set to 100 so that it's impossible for minute value to be same as minute change during startup
-// variables for reading and diplaying time
-int hour, minute, second;
-int hour1, hour2, minute1, minute2;
+//control variables:
+const int setupPin = 7;              //Pin connected to the button which changes setup mode
+const int incrementPin = 2;          //Pin connected to the button which changes values depending on setup mode
+int setupButtonState;                //variable which saves the last state of setupPin
+int incrementButtonState;            //variable which saves the last state of incrementPin
+int lastSetupButtonState = HIGH;     //variable which saves the last state of setupPin, necessary for state change detection
+int lastIncrementButtonState = HIGH; //variable which saves the last state of incrementPin, necessary for state change detection
+int setupMode = 0;                   //variable which saves the current value of setup mode
+
+//variables for controling shift registers:
+const int latchPin = 9;     //Pin connected to RCK of TPIC6B595
+const int masterReset = 10; //Pin connected to SRCLR of all TPIC6B595 IC-s
+const int dataPin = 11;     //Pin connected to SERIAL IN of TPIC6B595
+const int clockPin = 12;    //Pin connected to RCK of TPIC6B595
+
+//timing variables:
+int minuteCounter = -1;             //used to determine when half an hour has passed
+int minuteChange = 100;             //set to 100 so that it's impossible for minute value to be same as minute change during startup
+int hour, minute, second;           //variables for storing hour values, minute values and second values
+int hour1, hour2, minute1, minute2; //variables for storing each digit for hours and minutes
+
 //we do this so we can display time on serial monitor
 char *time = (char *)malloc(sizeof(char) * 9);
+
+//function for debouncing setupButton:
+void debouncedSetupButtonRead(int pin, const unsigned long debounceDelay)
+{
+  int reading = digitalRead(pin);
+  unsigned long previousTime;
+
+  if (reading != lastSetupButtonState)
+    previousTime = millis();
+
+  if ((millis() - previousTime) > debounceDelay)
+  {
+
+    if (reading != setupButtonState)
+    {
+      setupButtonState = reading;
+
+      if (setupButtonState == LOW)
+        setupMode++;
+    }
+  }
+  lastSetupButtonState = reading;
+}
+
+//function for debouncing incrementButton:
+void debouncedIncrementButtonRead(int pin, const unsigned long debounceDelay)
+{
+  int reading = digitalRead(pin);
+  unsigned long previousTime;
+
+  if (reading != lastIncrementButtonState)
+    previousTime = millis();
+
+  if ((millis() - previousTime) > debounceDelay)
+  {
+
+    if (reading != incrementButtonState)
+    {
+      incrementButtonState = reading;
+
+      if (incrementButtonState == LOW)
+        setupMode++;
+    }
+  }
+  lastIncrementButtonState = reading;
+}
+
 //function for shifting out n bits into the shift register, with their defined values
 void shiftOutBits(int dataPin, int clockPin, int bitOrder, int value, int bits)
 {
@@ -34,6 +93,7 @@ void shiftOutBits(int dataPin, int clockPin, int bitOrder, int value, int bits)
     digitalWrite(clockPin, LOW);
   }
 }
+
 //this void updates displayed time
 void updateDisplayedTime()
 {
@@ -44,8 +104,9 @@ void updateDisplayedTime()
   shiftOutBits(dataPin, clockPin, LSBFIRST, hour1, 10);
   digitalWrite(latchPin, HIGH);
 }
+
 /*
-Function necessary for longevity of NIXIE tubes, it lights up every digit one after another and repeats it 1300 times, with frequency high enough for human eye not to notice.
+Function necessary for longevity of NIXIE tubes, it lights up every digit one after another and repeats it for a certain ammount of time, with frequency high enough for human eye not to notice.
 This should be done as frequently as possible, but every half hour will do just fine
 */
 void doCathodeRoutine(const unsigned long timeInterval) //timeInterval --> how long will cathode routine run (in milliseconds)
@@ -74,6 +135,8 @@ void setup()
   {
   }
   //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //sets date and time to date and time the program was compiled
+  pinMode(setupPin, INPUT_PULLUP);
+  pinMode(incrementPin, INPUT_PULLUP);
   pinMode(latchPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
@@ -82,6 +145,7 @@ void setup()
   digitalWrite(masterReset, LOW);
   delayMicroseconds(10);
   digitalWrite(masterReset, HIGH);
+  doCathodeRoutine(5000);
   //establish serial communication with baud rate of 9600 bits per second
   Serial.begin(9600);
 }
@@ -90,21 +154,29 @@ void loop()
 {
 
   DateTime now = rtc.now();
+
   //store values of hours and minutes in their respecitive varables
   hour = now.hour();
   minute = now.minute();
+
   //separate first and second digit of hour value
   hour1 = hour / 10;
   hour2 = hour % 10;
+
   //separate first and second digit of minute value
   minute1 = minute / 10;
   minute2 = minute % 10;
+
+  //constantly check for setupButton state:
+  debouncedSetupButtonRead(setupPin, 50);
+
   //chech if minute value has changed, and if it did, update displayed time
   if (minuteChange != minute)
   {
     updateDisplayedTime();
     minuteChange = minute;
     minuteCounter++;
+
     //check if half an hour has passed and do CathodeRoutine
     if (minuteCounter == 30)
     {
@@ -113,11 +185,12 @@ void loop()
       minuteCounter = 0;
     }
   }
+
   //print out time from rtc module on seral monitor
-  /*   sprintf(time, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+  sprintf(time, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
   if (second != now.second())
   {
     Serial.println(time);
     second = now.second();
-  } */
+  }
 }

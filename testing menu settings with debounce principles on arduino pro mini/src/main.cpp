@@ -1,17 +1,17 @@
 #include <Arduino.h>
 
-const int buttonPin = 7;
-const int incrementPin = 2;
-int buttonState1;
-int buttonState2;
-int lastButtonState1 = HIGH;
-int lastButtonState2 = HIGH;
-unsigned long previousTime1;
-unsigned long previousTime2;
-int setupMode = 0;
+const int buttonPin = 7;     //implemented
+const int incrementPin = 2;  //implemented
+int buttonState1;            //implemented   setupButtonState
+int buttonState2;            //implemented   incrementButtonState
+int lastButtonState1 = HIGH; //implemented   lastSetupButtonState
+int lastButtonState2 = HIGH; //implemented   lastIncrementButtonState
+unsigned long previousTime1; //implemented   previousSetupButtonTime
+unsigned long previousTime2; //implemented   previousIncrementButtonTime
+int setupMode = 0;           //implemented
 int counter = 0;
 
-void debouncedButton1Read(int pin, const unsigned long debounceDelay)
+void debouncedButton1Read(int pin, const unsigned long debounceDelay) //implemented
 {
   int reading1 = digitalRead(pin);
 
@@ -32,7 +32,7 @@ void debouncedButton1Read(int pin, const unsigned long debounceDelay)
   lastButtonState1 = reading1;
 }
 
-void debouncedButton2Read(int pin, const unsigned long debounceDelay)
+void debouncedButton2Read(int pin, const unsigned long debounceDelay) //implemented
 {
   int reading2 = digitalRead(pin);
 
