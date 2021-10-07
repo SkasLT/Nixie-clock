@@ -3,7 +3,7 @@
 #include <RTClib.h>
 
 //debugging
-#define DEBUG 1 //choose to debug or not; 1 is debugging 0 is not
+#define DEBUG 0 //choose to debug or not; 1 is debugging 0 is not
 
 #if DEBUG == 1
 #define debug(x) Serial.print(x)

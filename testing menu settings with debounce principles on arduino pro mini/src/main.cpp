@@ -1,68 +1,47 @@
 #include <Arduino.h>
+#define number_of_buttons 2
 
-const int buttonPin = 7;     //implemented
-const int incrementPin = 2;  //implemented
-int buttonState1;            //implemented   setupButtonState
-int buttonState2;            //implemented   incrementButtonState
-int lastButtonState1 = HIGH; //implemented   lastSetupButtonState
-int lastButtonState2 = HIGH; //implemented   lastIncrementButtonState
-unsigned long previousTime1; //implemented   previousSetupButtonTime
-unsigned long previousTime2; //implemented   previousIncrementButtonTime
-int setupMode = 0;           //implemented
+int button[number_of_buttons] = {7, 2};
+int buttonState[number_of_buttons] = {1, 1};
+int lastButtonState[number_of_buttons] = {1, 1};
+int setupMode = 0;
 int counter = 0;
 
-void debouncedButton1Read(int pin, const unsigned long debounceDelay) //implemented
+bool debouncedButtonRead(int buttonIndex, const unsigned long debounceDelay)
 {
-  int reading1 = digitalRead(pin);
+  int reading = digitalRead(button[buttonIndex]);
+  unsigned long previousTime;
 
-  if (reading1 != lastButtonState1)
-    previousTime1 = millis();
+  if (reading != lastButtonState[buttonIndex])
+    previousTime = millis();
 
-  if ((millis() - previousTime1) > debounceDelay)
+  if ((millis() - previousTime) > debounceDelay)
   {
 
-    if (reading1 != buttonState1)
+    if (reading != buttonState[buttonIndex])
     {
-      buttonState1 = reading1;
+      buttonState[buttonIndex] = reading;
 
-      if (buttonState1 == LOW)
-        setupMode++;
+      if (buttonState[buttonIndex] == LOW)
+        return true;
     }
   }
-  lastButtonState1 = reading1;
-}
-
-void debouncedButton2Read(int pin, const unsigned long debounceDelay) //implemented
-{
-  int reading2 = digitalRead(pin);
-
-  if (reading2 != lastButtonState2)
-    previousTime2 = millis();
-
-  if ((millis() - previousTime2) > debounceDelay)
-  {
-
-    if (reading2 != buttonState2)
-    {
-      buttonState2 = reading2;
-
-      if (buttonState2 == LOW)
-        counter++;
-    }
-  }
-  lastButtonState2 = reading2;
+  lastButtonState[buttonIndex] = reading;
+  return false;
 }
 
 void setup()
 {
-  pinMode(buttonPin, INPUT_PULLUP);
-  pinMode(incrementPin, INPUT_PULLUP);
+  for (int i = 0; i < number_of_buttons; i++)
+    pinMode(button[i], INPUT_PULLUP);
+
   Serial.begin(9600);
 }
 
 void loop()
 {
-  debouncedButton1Read(buttonPin, 50);
+  if (debouncedButtonRead(0, 50))
+    setupMode++;
   Serial.println(setupMode);
 
   switch (setupMode)
@@ -70,8 +49,10 @@ void loop()
   case 1:
     while (setupMode == 1)
     {
-      debouncedButton1Read(buttonPin, 50);
-      debouncedButton2Read(incrementPin, 50);
+      if (debouncedButtonRead(0, 50))
+        setupMode++;
+      if (debouncedButtonRead(1, 50))
+        counter++;
       Serial.print("1 : ");
       Serial.println(counter);
     }
@@ -80,8 +61,10 @@ void loop()
     counter = 0;
     while (setupMode == 2)
     {
-      debouncedButton1Read(buttonPin, 50);
-      debouncedButton2Read(incrementPin, 50);
+      if (debouncedButtonRead(0, 50))
+        setupMode++;
+      if (debouncedButtonRead(1, 50))
+        counter++;
       Serial.print("2 : ");
       Serial.println(counter);
     }
@@ -90,8 +73,10 @@ void loop()
     counter = 0;
     while (setupMode == 3)
     {
-      debouncedButton1Read(buttonPin, 50);
-      debouncedButton2Read(incrementPin, 50);
+      if (debouncedButtonRead(0, 50))
+        setupMode++;
+      if (debouncedButtonRead(1, 50))
+        counter++;
       Serial.print("3 : ");
       Serial.println(counter);
     }

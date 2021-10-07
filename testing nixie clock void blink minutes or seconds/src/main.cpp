@@ -1,9 +1,13 @@
+//NOT IMPLEMENTED
 #include <Arduino.h>
 #include <Wire.h>
 #include <RTClib.h>
 
 RTC_DS3231 rtc;
-
+int minuteLedState = HIGH;
+int hourLedState = HIGH;
+const int hourLed = 4;
+const int minuteLed = 5;
 const int latchPin = 9;     //Pin connected to RCK of TPIC6B595
 const int masterReset = 10; //Pin connected to SRCLR of all TPIC6B595 IC-s
 const int dataPin = 11;     //Pin connected to SERIAL IN of TPIC6B595
@@ -13,8 +17,7 @@ int minuteChange = 100;     //set to 100 so that it's impossible for minute valu
 int hour, minute, second;
 int hour1, hour2, minute1, minute2;
 //variables for selecting if we want to blink hour or minute digits
-const int selectHours = 2;
-const int selectMinutes = 4;
+unsigned long previousDelayTime = 0;
 //we do this so we can display time on serial monitor
 char *time = (char *)malloc(sizeof(char) * 9);
 //function for shifting out n bits into the shift register, with their defined values
@@ -50,25 +53,24 @@ void updateDisplayedTime()
 Function necessary for longevity of NIXIE tubes, it lights up every digit one after another and repeats it 1000 times, with frequency high enough for human eye not to notice.
 This should be done as frequently as possible, but every half hour will do just fine
 */
-void blinkDisplayedTime(int hoursOrMinutes, const unsigned long blinkDelay)
+void blinkLed(char hoursOrMinutes, const unsigned long blinkDelay)
 {
-  unsigned long previousDelayTime = millis(); //used for blinkind minutes or sencods
-  digitalWrite(latchPin, LOW);
-
-  if (hoursOrMinutes == 2 && (millis() - previousDelayTime <= blinkDelay))
+  if (millis() - previousDelayTime >= blinkDelay)
   {
-    Serial.println(millis() - previousDelayTime);
-    shiftOutBits(dataPin, clockPin, LSBFIRST, minute2, 10);
-    shiftOutBits(dataPin, clockPin, LSBFIRST, minute1, 10);
-    digitalWrite(dataPin, LOW);
-
-    for (int i = 0; i < 20; i++)
+    switch (hoursOrMinutes)
     {
-      digitalWrite(clockPin, HIGH);
-      digitalWrite(clockPin, LOW);
+    case 'H':
+      hourLedState = !hourLedState;
+      digitalWrite(hourLed, hourLedState);
+      break;
+
+    case 'M':
+      minuteLedState = !minuteLedState;
+      digitalWrite(minuteLed, minuteLedState);
+      break;
     }
+    previousDelayTime = millis();
   }
-  digitalWrite(latchPin, HIGH);
 }
 
 void doCathodeRoutine()
@@ -95,13 +97,14 @@ void setup()
 {
   //wait for rtc module to connect
   while (!rtc.begin())
-  {
-  }
+    continue;
   //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //sets date and time to date and time the program was uploaded
   pinMode(latchPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
   pinMode(masterReset, OUTPUT);
+  pinMode(hourLed, OUTPUT);
+  pinMode(minuteLed, OUTPUT);
   //before proceeding we will reset all shift registers to make sure that there are no undefined previous states on their data inputs (all shift register reset pints are tied together)
   digitalWrite(masterReset, LOW);
   delayMicroseconds(10);
@@ -113,7 +116,6 @@ void setup()
 
 void loop()
 {
-
   DateTime now = rtc.now();
   //store values of hours and minutes in their respecitive varables
   hour = now.hour();
@@ -124,7 +126,6 @@ void loop()
   //separate first and second digit of minute value
   minute1 = minute / 10;
   minute2 = minute % 10;
-  //update displayed time every minute
 
-  blinkDisplayedTime(selectHours, 200);
+  blinkLed('M', 100);
 }
