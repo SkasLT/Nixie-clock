@@ -32,6 +32,11 @@ const int minuteLed = 5;    // Pin connected a led that will light up whem adjus
 int hourLedState = HIGH;    // variable that stores current hourLed state
 int minuteLedState = HIGH;  // variable that stores current minuteLed state
 
+// motion detection Variables
+const int sensorPin = 3;
+const int displayControlPin = 2;
+unsigned long previousTime = 0;
+
 // Timing variables:
 int minuteCounter = -1;
 int minuteChange = 100; // set to 100 so that it's impossible for minute value to be same as minute change during startup
@@ -91,13 +96,13 @@ bool debouncedButtonRead(int buttonIndex, const unsigned long debounceDelay)
 }
 
 /**
- * function for shifting out n bits into the storage register, with their defined values
+ * function for shifting out the nth bit into the storage register (value determines which bit)
  * @param dataPin pin connected to serial data input for shift registers
  * @param clockPin clock pin connected to clock input for shift registers
  * @param bitOrder order of bits (LSB, MSB)
  * @param value sequential bit number to be shifted out
  * @param bits number of bits to shift out
- * @param enableBlanking when this enabled all bitts that are shifted out will be zeroes (no digit will light up)
+ * @param enableBlanking when this is enabled all bitts that are shifted out will be zeroes (no digit will light up)
  */
 void shiftOutBits(int dataPin, int clockPin, int bitOrder, int value, int bits, bool enableBlanking)
 {
@@ -155,10 +160,10 @@ void calculateTime()
  * Function necessary for longevity of NIXIE tubes, it lights up every digit one after another and repeats it for a certain ammount of time
  * This should be done as frequently as possible, but every 15 minutes will be ok
  * @param timeInterval how long will cathode routine run (in milliseconds)
- * @param timeDelay time between digit changes (in milliseconds) make sure timeDelay is large relative to timeInterval because cathode routine will run longer
- * than timeDelay
+ * @param digitDelay time between digit changes (in milliseconds) make sure digitDelay is large relative to timeInterval because cathode routine will run longer
+ * than digitDelay
  */
-void doCathodeRoutine(const unsigned long timeInterval, const unsigned long timeDelay)
+void doCathodeRoutine(const unsigned long timeInterval, const unsigned long digitDelay)
 {
   unsigned long previousTime = millis();
 
@@ -172,7 +177,7 @@ void doCathodeRoutine(const unsigned long timeInterval, const unsigned long time
       shiftOutBits(dataPin, clockPin, LSBFIRST, i, 10, false);
       shiftOutBits(dataPin, clockPin, LSBFIRST, i, 10, false);
       digitalWrite(latchPin, HIGH);
-      delay(timeDelay);
+      delay(digitDelay);
     }
     for (int i = 8; i > 0; i--) // loop runs 10 times since every NIXIE tube has 10 digits (9...0)
     {
@@ -182,7 +187,7 @@ void doCathodeRoutine(const unsigned long timeInterval, const unsigned long time
       shiftOutBits(dataPin, clockPin, LSBFIRST, i, 10, false);
       shiftOutBits(dataPin, clockPin, LSBFIRST, i, 10, false);
       digitalWrite(latchPin, HIGH);
-      delay(timeDelay);
+      delay(digitDelay);
     }
   }
   debugln("cathode routine has completed");
@@ -207,6 +212,30 @@ void getCurrentTime()
     sprintf(buffer, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
     debugln(buffer);
     second = now.second();
+  }
+}
+
+/**
+ * Function that detects motion and turns on or off nixie display after some time of inactivity
+ * @param timeDelay after how many minutes of inactivity will nixie display turn off
+ */
+void motionDetection(const unsigned long timeDelay)
+{
+  int trigger = digitalRead(sensorPin);
+
+  if (trigger == HIGH)
+  {
+    previousTime = millis();
+    digitalWrite(displayControlPin, HIGH);
+    debugln("Motion has been detected!");
+  }
+
+  if (millis() - previousTime >= (timeDelay * 60000))
+  {
+    digitalWrite(displayControlPin, LOW);
+    previousTime = millis();
+    debug(timeDelay);
+    debugln(" minutes have passed and no motion has beed detected");
   }
 }
 
@@ -294,6 +323,10 @@ void timeChange(int timeToPass)
       debug(timeToPass);
       debugln(" minutes have passed, doing cathodeRoutine...");
       doCathodeRoutine(3000, 25);
+      if (hour < 10) // blank first minute digit when time is 04:00 --> 4:00
+        updateDisplayedTime(hour_1);
+      else
+        updateDisplayedTime(false);
       minuteCounter = 0;
     }
   }
@@ -314,11 +347,14 @@ void setup()
   pinMode(masterReset, OUTPUT);
   pinMode(hourLed, OUTPUT);
   pinMode(minuteLed, OUTPUT);
+  pinMode(displayControlPin, OUTPUT);
+  pinMode(sensorPin, INPUT);
 
   digitalWrite(masterReset, LOW);
   delayMicroseconds(10);
   digitalWrite(masterReset, HIGH);
   doCathodeRoutine(2000, 25);
+  digitalWrite(displayControlPin, HIGH);
 
   // serial communication for debugging
   debug_begin(9600);
@@ -330,7 +366,8 @@ void loop()
   getCurrentTime();
   // check for time change
   timeChange(15);
-
+  // check for motion
+  motionDetection(60);
   // check for menu button press
   if (debouncedButtonRead(0, 50))
     setupMode++;
